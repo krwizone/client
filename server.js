@@ -1,4 +1,3 @@
-const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -7,41 +6,227 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Serve static files (index.html, game.js) from current folder
 app.use(express.static(__dirname));
-
-// Simple health check
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-// In-memory players
-const players = {}; // id -> { id, x, y }
 const CANVAS_W = 900;
 const CANVAS_H = 600;
 const RADIUS = 20;
+const MELEE_RANGE = 60;
+const FIREBALL_RANGE = 320;
+const FIREBALL_WIDTH = 28;
+const BOT_MAX = 6;
+const BOT_SPEED = 2;
+const PLAYER_SPEED = 4;
 
-function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+const CLASSES = {
+  warrior: { maxHp: 6, maxEnergy: 3, color: 'royalblue', skill: 'whirlwind' },
+  mage: { maxHp: 5, maxEnergy: 3, color: 'crimson', skill: 'fireball' },
+  guardian: { maxHp: 7, maxEnergy: 3, color: 'seagreen', skill: 'shield' },
+  cleric: { maxHp: 5, maxEnergy: 3, color: 'goldenrod', skill: 'heal' }
+};
+
+const players = {}; // id -> {id,x,y,cls,hp,maxHp,energy,maxEnergy,alive,shield}
+const bots = []; // {id,x,y,hp,target}
+let botSeq = 0;
+
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+function dist(a, b){ const dx = a.x - b.x; const dy = a.y - b.y; return Math.hypot(dx, dy); }
+function randomPos(){
+  return {
+    x: Math.floor(Math.random() * (CANVAS_W - RADIUS * 2)) + RADIUS,
+    y: Math.floor(Math.random() * (CANVAS_H - RADIUS * 2)) + RADIUS
+  };
+}
+
+function spawnPlayer(id, cls){
+  const cfg = CLASSES[cls] || CLASSES.warrior;
+  const pos = randomPos();
+  players[id] = {
+    id,
+    cls: cls in CLASSES ? cls : 'warrior',
+    x: pos.x,
+    y: pos.y,
+    hp: cfg.maxHp,
+    maxHp: cfg.maxHp,
+    energy: 0,
+    maxEnergy: cfg.maxEnergy,
+    shield: 0,
+    alive: true
+  };
+}
+
+function ensureBot(){
+  while (bots.length < BOT_MAX){
+    const pos = randomPos();
+    bots.push({ id: `bot-${botSeq++}`, x: pos.x, y: pos.y, hp: 2 });
+  }
+}
+
+function applyDamagePlayer(targetId, amount, sourceId){
+  const p = players[targetId];
+  if (!p || !p.alive) return false;
+  if (p.shield > 0){
+    p.shield = 0;
+    return true;
+  }
+  p.hp -= amount;
+  if (p.hp <= 0){
+    delete players[targetId];
+    io.emit('playerLeft', targetId);
+    io.emit('playerDied', targetId);
+  }
+  if (sourceId && players[sourceId]){
+    const s = players[sourceId];
+    s.energy = clamp(s.energy + 1, 0, s.maxEnergy);
+  }
+  return true;
+}
+
+function applyDamageBot(botId, amount, sourceId){
+  const idx = bots.findIndex(b => b.id === botId);
+  if (idx === -1) return false;
+  bots[idx].hp -= amount;
+  if (bots[idx].hp <= 0) bots.splice(idx, 1);
+  if (sourceId && players[sourceId]){
+    const s = players[sourceId];
+    s.energy = clamp(s.energy + 1, 0, s.maxEnergy);
+  }
+  return true;
+}
+
+function meleeAttack(attackerId, dir){
+  const me = players[attackerId];
+  if (!me) return;
+  const targets = [];
+  for (const id in players){
+    if (id === attackerId) continue;
+    const p = players[id];
+    if (!p) continue;
+    const d = dist(me, p);
+    if (d <= MELEE_RANGE) targets.push({ type: 'player', id });
+  }
+  bots.forEach(b => {
+    const d = dist(me, b);
+    if (d <= MELEE_RANGE) targets.push({ type: 'bot', id: b.id });
+  });
+  const hit = targets[0];
+  if (!hit) return;
+  if (hit.type === 'player') applyDamagePlayer(hit.id, 1, attackerId);
+  else applyDamageBot(hit.id, 1, attackerId);
+}
+
+function skillWhirlwind(attackerId){
+  const me = players[attackerId];
+  if (!me) return;
+  const radius = 80;
+  for (const id in players){
+    if (id === attackerId) continue;
+    if (dist(me, players[id]) <= radius) applyDamagePlayer(id, 1, attackerId);
+  }
+  bots.slice().forEach(b => {
+    if (dist(me, b) <= radius) applyDamageBot(b.id, 1, attackerId);
+  });
+}
+
+function skillFireball(attackerId, dir){
+  const me = players[attackerId];
+  if (!me) return;
+  const norm = Math.hypot(dir.x, dir.y) || 1;
+  const ux = dir.x / norm;
+  const uy = dir.y / norm;
+  let best = null;
+  function consider(target, id, type){
+    const rx = target.x - me.x;
+    const ry = target.y - me.y;
+    const along = rx * ux + ry * uy;
+    if (along < 0 || along > FIREBALL_RANGE) return;
+    const side = Math.abs(rx * uy - ry * ux);
+    if (side > FIREBALL_WIDTH) return;
+    if (!best || along < best.along) best = { type, id, along };
+  }
+  for (const id in players){
+    if (id === attackerId) continue;
+    consider(players[id], id, 'player');
+  }
+  bots.forEach(b => consider(b, b.id, 'bot'));
+  if (!best) return;
+  if (best.type === 'player') applyDamagePlayer(best.id, 1, attackerId);
+  else applyDamageBot(best.id, 1, attackerId);
+}
+
+function skillShield(attackerId){
+  const me = players[attackerId];
+  if (!me) return;
+  me.shield = 1;
+}
+
+function skillHeal(attackerId){
+  const me = players[attackerId];
+  if (!me) return;
+  me.hp = clamp(me.hp + 3, 0, me.maxHp);
+}
+
+function castSkill(attackerId, dir){
+  const me = players[attackerId];
+  if (!me || me.energy < me.maxEnergy) return;
+  const skill = CLASSES[me.cls].skill;
+  if (skill === 'whirlwind') skillWhirlwind(attackerId);
+  if (skill === 'fireball') skillFireball(attackerId, dir);
+  if (skill === 'shield') skillShield(attackerId);
+  if (skill === 'heal') skillHeal(attackerId);
+  me.energy = 0;
+}
+
+function moveBot(bot){
+  let nearest = null;
+  for (const id in players){
+    const p = players[id];
+    const d = dist(bot, p);
+    if (!nearest || d < nearest.d) nearest = { id, d, p };
+  }
+  if (!nearest) return;
+  const dx = nearest.p.x - bot.x;
+  const dy = nearest.p.y - bot.y;
+  const n = Math.hypot(dx, dy) || 1;
+  bot.x = clamp(bot.x + (dx / n) * BOT_SPEED, RADIUS, CANVAS_W - RADIUS);
+  bot.y = clamp(bot.y + (dy / n) * BOT_SPEED, RADIUS, CANVAS_H - RADIUS);
+  if (dist(bot, nearest.p) <= MELEE_RANGE){
+    applyDamagePlayer(nearest.id, 1, null);
+  }
+}
 
 io.on('connection', socket => {
   const id = socket.id;
-  // Spawn new player within bounds
-  const x = Math.floor(Math.random() * (CANVAS_W - RADIUS * 2)) + RADIUS;
-  const y = Math.floor(Math.random() * (CANVAS_H - RADIUS * 2)) + RADIUS;
-  players[id] = { id, x, y };
 
-  // Send current roster to the new client
-  socket.emit('currentPlayers', players);
-  // Inform others about the new player
-  socket.broadcast.emit('playerJoined', players[id]);
+  socket.on('chooseClass', data => {
+    if (players[id]) return;
+    const cls = data && data.cls;
+    spawnPlayer(id, cls);
+    socket.emit('currentPlayers', players);
+    socket.emit('bots', bots);
+    socket.broadcast.emit('playerJoined', players[id]);
+  });
 
-  // Movement updates from client
   socket.on('move', pos => {
-    if (!players[id]) return;
-    const nx = clamp(Number(pos.x) || players[id].x, RADIUS, CANVAS_W - RADIUS);
-    const ny = clamp(Number(pos.y) || players[id].y, RADIUS, CANVAS_H - RADIUS);
-    players[id].x = nx;
-    players[id].y = ny;
-    // Broadcast to all (including sender) for consistency
-    io.emit('playerMoved', players[id]);
+    const me = players[id];
+    if (!me) return;
+    me.x = clamp(Number(pos.x) || me.x, RADIUS, CANVAS_W - RADIUS);
+    me.y = clamp(Number(pos.y) || me.y, RADIUS, CANVAS_H - RADIUS);
+  });
+
+  socket.on('attack', data => {
+    const me = players[id];
+    if (!me) return;
+    const dir = { x: Number(data.x) - me.x, y: Number(data.y) - me.y };
+    meleeAttack(id, dir);
+  });
+
+  socket.on('skill', data => {
+    const me = players[id];
+    if (!me) return;
+    const dir = { x: Number(data.x) - me.x, y: Number(data.y) - me.y };
+    castSkill(id, dir);
   });
 
   socket.on('disconnect', () => {
@@ -49,6 +234,15 @@ io.on('connection', socket => {
     io.emit('playerLeft', id);
   });
 });
+
+setInterval(() => {
+  ensureBot();
+  bots.forEach(moveBot);
+}, 120);
+
+setInterval(() => {
+  io.emit('state', { players, bots });
+}, 120);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

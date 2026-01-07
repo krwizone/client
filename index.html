@@ -12,13 +12,40 @@ canvas{display:block;background:#d2b48c}
 @media (hover: none) and (pointer: coarse){
 	.joystick{display:block}
 }
+.class-select{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,0.5);backdrop-filter:blur(3px)}
+.class-select .card{padding:12px 16px;border-radius:8px;background:#fff;cursor:pointer;min-width:120px;text-align:center;box-shadow:0 4px 10px rgba(0,0,0,0.25)}
+.class-select h2{color:#222;font-family:sans-serif;margin:0 0 8px 0;font-size:18px;text-align:center;width:100%}
+.class-select .grid{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.actions{position:fixed;right:20px;bottom:20px;display:none;flex-direction:column;gap:10px}
+.actions button{padding:14px 18px;border:none;border-radius:10px;background:#333;color:#fff;font-size:16px;box-shadow:0 4px 10px rgba(0,0,0,0.25);cursor:pointer;min-width:120px}
+.actions button:active{transform:scale(0.98)}
+@media (hover: none) and (pointer: coarse){
+  .actions{display:flex}
+}
 </style>
 </head>
 
 <body>
 <canvas id="game" width="900" height="600"></canvas>
 
+<div id="class-select" class="class-select">
+	<div class="panel">
+		<h2>Select Class</h2>
+		<div class="grid">
+			<div class="card" data-class="warrior">Warrior<br><small>Spin cleave</small></div>
+			<div class="card" data-class="mage">Mage<br><small>Fireball</small></div>
+			<div class="card" data-class="guardian">Guardian<br><small>Shield once</small></div>
+			<div class="card" data-class="cleric">Cleric<br><small>Self heal</small></div>
+		</div>
+	</div>
+</div>
+
 <div id="joystick" class="joystick"><div id="stick" class="stick"></div></div>
+
+<div class="actions">
+	<button id="btn-attack">Attack</button>
+	<button id="btn-skill">Skill</button>
+</div>
 
 <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 <script src="game.js"></script>
