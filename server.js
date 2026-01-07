@@ -9,8 +9,8 @@ const io = new Server(server);
 app.use(express.static(__dirname));
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-const CANVAS_W = 900;
-const CANVAS_H = 600;
+const CANVAS_W = 1200;
+const CANVAS_H = 800;
 const RADIUS = 20;
 const MELEE_RANGE = 60;
 const FIREBALL_RANGE = 320;
