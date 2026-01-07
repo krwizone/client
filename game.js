@@ -17,6 +17,7 @@ let bots = [];
 let myId = null;
 let selectedClass = null;
 let lastAim = { x: 1, y: 0 };
+let effects = []; // transient visual effects
 
 const keys = { w: false, a: false, s: false, d: false };
 document.addEventListener("keydown", e => { if (e.key in keys) keys[e.key] = true; });
@@ -168,6 +169,8 @@ bindTouchButton(attackBtn, () => {
   if (!me) return;
   const aim = aimFromLast(me);
   socket.emit('attack', { x: aim.x, y: aim.y });
+  // Local immediate effect
+  addSlashEffect(myId, aim.x - me.x, aim.y - me.y);
 });
 
 bindTouchButton(skillBtn, () => {
@@ -176,6 +179,17 @@ bindTouchButton(skillBtn, () => {
   const aim = aimFromLast(me);
   socket.emit('skill', { x: aim.x, y: aim.y });
 });
+
+// Receive attack visual effects from server
+socket.on('attackFx', data => {
+  if (!data) return;
+  addSlashEffect(data.id, data.dx, data.dy);
+});
+
+function addSlashEffect(attackerId, dx, dy){
+  const ang = Math.atan2(dy, dx);
+  effects.push({ type: 'slash', id: attackerId, angle: ang, t: performance.now(), dur: 220 });
+}
 
 const local = { x: 450, y: 300, speed: 4 };
 let lastX = local.x;
@@ -260,6 +274,26 @@ function draw(){
       ctx.stroke();
     }
   }
+
+  // Draw effects
+  const now = performance.now();
+  effects = effects.filter(e => now - e.t < e.dur);
+  effects.forEach(e => {
+    const src = players[e.id];
+    if (!src) return;
+    const px = e.id === myId ? local.x : src.x;
+    const py = e.id === myId ? local.y : src.y;
+    const prog = (now - e.t) / e.dur; // 0..1
+    const alpha = 1 - prog;
+    const radius = 22 + prog * 16;
+    ctx.save();
+    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(px, py, radius, e.angle - 0.7 + prog*0.2, e.angle + 0.7 - prog*0.2);
+    ctx.stroke();
+    ctx.restore();
+  });
 
   // HUD
   if (me){

@@ -18,12 +18,14 @@ const FIREBALL_WIDTH = 28;
 const BOT_MAX = 6;
 const BOT_SPEED = 2;
 const PLAYER_SPEED = 4;
+const BOT_ATTACK_COOLDOWN = 600; // ms between bot attacks
+const TICK_MS = 120; // server tick interval
 
 const CLASSES = {
-  warrior: { maxHp: 6, maxEnergy: 3, color: 'royalblue', skill: 'whirlwind' },
-  mage: { maxHp: 5, maxEnergy: 3, color: 'crimson', skill: 'fireball' },
-  guardian: { maxHp: 7, maxEnergy: 3, color: 'seagreen', skill: 'shield' },
-  cleric: { maxHp: 5, maxEnergy: 3, color: 'goldenrod', skill: 'heal' }
+  warrior: { maxHp: 9, maxEnergy: 3, color: 'royalblue', skill: 'whirlwind' },
+  mage: { maxHp: 8, maxEnergy: 3, color: 'crimson', skill: 'fireball' },
+  guardian: { maxHp: 11, maxEnergy: 3, color: 'seagreen', skill: 'shield' },
+  cleric: { maxHp: 9, maxEnergy: 3, color: 'goldenrod', skill: 'heal' }
 };
 
 const players = {}; // id -> {id,x,y,cls,hp,maxHp,energy,maxEnergy,alive,shield}
@@ -59,7 +61,7 @@ function spawnPlayer(id, cls){
 function ensureBot(){
   while (bots.length < BOT_MAX){
     const pos = randomPos();
-    bots.push({ id: `bot-${botSeq++}`, x: pos.x, y: pos.y, hp: 2 });
+    bots.push({ id: `bot-${botSeq++}`, x: pos.x, y: pos.y, hp: 2, cd: 0 });
   }
 }
 
@@ -179,6 +181,7 @@ function castSkill(attackerId, dir){
 }
 
 function moveBot(bot){
+  bot.cd = Math.max(0, bot.cd - TICK_MS);
   let nearest = null;
   for (const id in players){
     const p = players[id];
@@ -191,8 +194,9 @@ function moveBot(bot){
   const n = Math.hypot(dx, dy) || 1;
   bot.x = clamp(bot.x + (dx / n) * BOT_SPEED, RADIUS, CANVAS_W - RADIUS);
   bot.y = clamp(bot.y + (dy / n) * BOT_SPEED, RADIUS, CANVAS_H - RADIUS);
-  if (dist(bot, nearest.p) <= MELEE_RANGE){
+  if (dist(bot, nearest.p) <= MELEE_RANGE && bot.cd === 0){
     applyDamagePlayer(nearest.id, 1, null);
+    bot.cd = BOT_ATTACK_COOLDOWN;
   }
 }
 
@@ -222,6 +226,8 @@ io.on('connection', socket => {
     if (!me) return;
     const dir = { x: Number(data.x) - me.x, y: Number(data.y) - me.y };
     meleeAttack(id, dir);
+    // Broadcast attack effect for clients to render
+    io.emit('attackFx', { id, dx: dir.x, dy: dir.y });
   });
 
   socket.on('skill', data => {
@@ -240,7 +246,7 @@ io.on('connection', socket => {
 setInterval(() => {
   ensureBot();
   bots.forEach(moveBot);
-}, 120);
+}, TICK_MS);
 
 setInterval(() => {
   io.emit('state', { players, bots });
