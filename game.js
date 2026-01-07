@@ -102,9 +102,14 @@ document.querySelectorAll('[data-class]').forEach(btn => {
 
 socket.on("connect", () => { myId = socket.id; });
 
+let spawnedLocal = false;
 socket.on("currentPlayers", data => {
   Object.keys(players).forEach(k => delete players[k]);
   Object.assign(players, data || {});
+  const me = players[myId];
+  if (me && !spawnedLocal){
+    local.x = me.x; local.y = me.y; spawnedLocal = true;
+  }
   if (!players[myId]) classSelect.style.display = "flex";
 });
 
@@ -116,6 +121,12 @@ socket.on("state", data => {
   if (!players[myId]){
     classSelect.style.display = "flex";
   }
+});
+
+socket.on("playerMoved", p => {
+  if (!p || !p.id) return;
+  const cur = players[p.id] || {};
+  players[p.id] = { ...cur, ...p };
 });
 
 socket.on("playerJoined", p => players[p.id] = p);
@@ -190,10 +201,19 @@ function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   const me = players[myId];
-  if (me){
-    // Snap local position to authoritative state occasionally
-    local.x = me.x;
-    local.y = me.y;
+  if (me && spawnedLocal){
+    // Soft-correct local position toward server to avoid drift
+    const dx = me.x - local.x;
+    const dy = me.y - local.y;
+    const err = Math.hypot(dx, dy);
+    if (err > 100){
+      // Large divergence: snap
+      local.x = me.x; local.y = me.y;
+    } else {
+      // Gentle convergence
+      local.x += dx * 0.15;
+      local.y += dy * 0.15;
+    }
   }
 
   if (me){
@@ -221,20 +241,22 @@ function draw(){
     ctx.fill();
   });
 
-  // Draw players
+  // Draw players (self rendered from predicted local position)
   for (const id in players){
     const p = players[id];
     const info = CLASS_INFO[p.cls] || { color: "red" };
-    ctx.fillStyle = id === myId ? info.color : info.color;
+    const px = id === myId ? local.x : p.x;
+    const py = id === myId ? local.y : p.y;
+    ctx.fillStyle = info.color;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 20, 0, Math.PI*2);
+    ctx.arc(px, py, 20, 0, Math.PI*2);
     ctx.fill();
-    drawBars(p);
+    drawBars({ ...p, x: px, y: py });
     if (p.shield > 0){
       ctx.strokeStyle = "#0ff";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 24, 0, Math.PI*2);
+      ctx.arc(px, py, 24, 0, Math.PI*2);
       ctx.stroke();
     }
   }

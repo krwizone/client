@@ -213,6 +213,8 @@ io.on('connection', socket => {
     if (!me) return;
     me.x = clamp(Number(pos.x) || me.x, RADIUS, CANVAS_W - RADIUS);
     me.y = clamp(Number(pos.y) || me.y, RADIUS, CANVAS_H - RADIUS);
+    // Broadcast quick movement update to others to reduce perceived lag
+    socket.broadcast.emit('playerMoved', me);
   });
 
   socket.on('attack', data => {
