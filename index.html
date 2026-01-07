@@ -6,11 +6,19 @@
 <style>
 body{margin:0;background:#c2a679}
 canvas{display:block;background:#d2b48c}
+/* Show joystick only on touch devices */
+.joystick{display:none;position:fixed;bottom:20px;left:20px;width:140px;height:140px;border-radius:50%;background:rgba(0,0,0,0.15);backdrop-filter:blur(2px);touch-action:none}
+.joystick .stick{position:absolute;width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,0.35);left:50%;top:50%;transform:translate(-50%, -50%)}
+@media (hover: none) and (pointer: coarse){
+	.joystick{display:block}
+}
 </style>
 </head>
 
 <body>
 <canvas id="game" width="900" height="600"></canvas>
+
+<div id="joystick" class="joystick"><div id="stick" class="stick"></div></div>
 
 <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 <script src="game.js"></script>

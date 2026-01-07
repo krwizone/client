@@ -1,4 +1,3 @@
-// Connect to same-origin Socket.IO server
 const socket = io();
 
 const canvas = document.getElementById("game");
@@ -29,7 +28,6 @@ socket.on("connect", () => {
   player.id = socket.id;
 });
 
-// Smooth movement: track key state and update in the frame loop
 const keys = { w: false, a: false, s: false, d: false };
 document.addEventListener("keydown", e => {
   if (e.key in keys) keys[e.key] = true;
@@ -40,6 +38,54 @@ document.addEventListener("keyup", e => {
 
 function clamp(v, min, max){
   return Math.max(min, Math.min(max, v));
+}
+
+const joy = { active: false, dx: 0, dy: 0, max: 50 };
+const joyEl = document.getElementById("joystick");
+const stickEl = document.getElementById("stick");
+let joyCx = 0, joyCy = 0;
+
+function setStick(dx, dy){
+  const d = Math.hypot(dx, dy);
+  const lim = Math.min(d, joy.max);
+  const a = Math.atan2(dy, dx);
+  const nx = Math.cos(a) * lim;
+  const ny = Math.sin(a) * lim;
+  stickEl.style.left = `calc(50% + ${nx}px)`;
+  stickEl.style.top = `calc(50% + ${ny}px)`;
+  joy.dx = nx / joy.max;
+  joy.dy = ny / joy.max;
+}
+
+function resetStick(){
+  joy.active = false;
+  joy.dx = 0;
+  joy.dy = 0;
+  if (stickEl){
+    stickEl.style.left = `50%`;
+    stickEl.style.top = `50%`;
+  }
+}
+
+if (joyEl){
+  joyEl.addEventListener("touchstart", e => {
+    e.preventDefault();
+    joy.active = true;
+    const t = e.touches[0];
+    const r = joyEl.getBoundingClientRect();
+    joyCx = r.left + r.width/2;
+    joyCy = r.top + r.height/2;
+    setStick(t.clientX - joyCx, t.clientY - joyCy);
+  }, { passive: false });
+  joyEl.addEventListener("touchmove", e => {
+    if (!joy.active) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    setStick(t.clientX - joyCx, t.clientY - joyCy);
+  }, { passive: false });
+  joyEl.addEventListener("touchend", () => {
+    resetStick();
+  });
 }
 
 let lastX = player.x;
@@ -53,6 +99,11 @@ function draw(){
   if (keys.s) player.y += player.speed;
   if (keys.a) player.x -= player.speed;
   if (keys.d) player.x += player.speed;
+
+  if (joy.active){
+    player.x += player.speed * joy.dx;
+    player.y += player.speed * joy.dy;
+  }
 
   // Keep player within bounds considering radius 20
   player.x = clamp(player.x, 20, canvas.width - 20);
