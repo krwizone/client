@@ -18,6 +18,8 @@ let myId = null;
 let selectedClass = null;
 let lastAim = { x: 1, y: 0 };
 let effects = []; // transient visual effects
+const FIREBALL_RANGE = 320;
+const FIREBALL_SPEED = 600; // px/s visual speed
 
 const keys = { w: false, a: false, s: false, d: false };
 document.addEventListener("keydown", e => { if (e.key in keys) keys[e.key] = true; });
@@ -178,6 +180,9 @@ bindTouchButton(skillBtn, () => {
   if (!me || me.energy < me.maxEnergy) return;
   const aim = aimFromLast(me);
   socket.emit('skill', { x: aim.x, y: aim.y });
+  // Instant local skill FX
+  if (me.cls === 'warrior') addWhirlwindEffect(myId);
+  if (me.cls === 'mage') addFireballEffect(myId, lastAim.x, lastAim.y);
 });
 
 // Receive attack visual effects from server
@@ -186,9 +191,31 @@ socket.on('attackFx', data => {
   addSlashEffect(data.id, data.dx, data.dy);
 });
 
+// Skill FX from server
+socket.on('skillFx', data => {
+  if (!data) return;
+  if (data.type === 'whirlwind') addWhirlwindEffect(data.id);
+  else if (data.type === 'fireball') addFireballEffect(data.id, data.ux, data.uy);
+});
+
 function addSlashEffect(attackerId, dx, dy){
   const ang = Math.atan2(dy, dx);
   effects.push({ type: 'slash', id: attackerId, angle: ang, t: performance.now(), dur: 220 });
+}
+
+function addWhirlwindEffect(attackerId){
+  effects.push({ type: 'whirlwind', id: attackerId, t: performance.now(), dur: 320 });
+}
+
+function addFireballEffect(attackerId, ux, uy){
+  const norm = Math.hypot(ux, uy) || 1;
+  const vx = (ux / norm);
+  const vy = (uy / norm);
+  const src = players[attackerId];
+  const px = attackerId === myId ? local.x : (src?.x || 0);
+  const py = attackerId === myId ? local.y : (src?.y || 0);
+  const dur = (FIREBALL_RANGE / FIREBALL_SPEED) * 1000;
+  effects.push({ type: 'fireball', id: attackerId, x: px, y: py, ux: vx, uy: vy, t: performance.now(), dur });
 }
 
 const local = { x: 450, y: 300, speed: 4 };
@@ -287,11 +314,42 @@ function draw(){
     const alpha = 1 - prog;
     const radius = 22 + prog * 16;
     ctx.save();
-    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(px, py, radius, e.angle - 0.7 + prog*0.2, e.angle + 0.7 - prog*0.2);
-    ctx.stroke();
+    if (e.type === 'slash'){
+      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, e.angle - 0.7 + prog*0.2, e.angle + 0.7 - prog*0.2);
+      ctx.stroke();
+    } else if (e.type === 'whirlwind'){
+      const r = 28 + prog * 60; // match server radius ~80
+      ctx.strokeStyle = `rgba(135,206,250,${alpha})`;
+      ctx.lineWidth = 4;
+      for (let i=0;i<3;i++){
+        const off = i*0.6;
+        ctx.beginPath();
+        ctx.arc(px, py, r, off, off+0.9);
+        ctx.stroke();
+      }
+    } else if (e.type === 'fireball'){
+      // Move ball along direction
+      const dist = Math.min(FIREBALL_RANGE, FIREBALL_SPEED * (now - e.t) / 1000);
+      const bx = e.x + e.ux * dist;
+      const by = e.y + e.uy * dist;
+      const grad = ctx.createRadialGradient(bx, by, 4, bx, by, 14);
+      grad.addColorStop(0, `rgba(255,200,80,${alpha})`);
+      grad.addColorStop(1, `rgba(255,80,0,${alpha*0.7})`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(bx, by, 12, 0, Math.PI*2);
+      ctx.fill();
+      // faint trail
+      ctx.strokeStyle = `rgba(255,140,0,${alpha*0.6})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+    }
     ctx.restore();
   });
 

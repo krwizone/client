@@ -173,10 +173,25 @@ function castSkill(attackerId, dir){
   const me = players[attackerId];
   if (!me || me.energy < me.maxEnergy) return;
   const skill = CLASSES[me.cls].skill;
-  if (skill === 'whirlwind') skillWhirlwind(attackerId);
-  if (skill === 'fireball') skillFireball(attackerId, dir);
-  if (skill === 'shield') skillShield(attackerId);
-  if (skill === 'heal') skillHeal(attackerId);
+  if (skill === 'whirlwind') {
+    skillWhirlwind(attackerId);
+    io.emit('skillFx', { id: attackerId, type: 'whirlwind' });
+  }
+  if (skill === 'fireball') {
+    skillFireball(attackerId, dir);
+    const norm = Math.hypot(dir.x, dir.y) || 1;
+    const ux = dir.x / norm;
+    const uy = dir.y / norm;
+    io.emit('skillFx', { id: attackerId, type: 'fireball', ux, uy });
+  }
+  if (skill === 'shield') {
+    skillShield(attackerId);
+    io.emit('skillFx', { id: attackerId, type: 'shield' });
+  }
+  if (skill === 'heal') {
+    skillHeal(attackerId);
+    io.emit('skillFx', { id: attackerId, type: 'heal' });
+  }
   me.energy = 0;
 }
 
