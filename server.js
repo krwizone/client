@@ -124,10 +124,10 @@ function skillWhirlwind(attackerId){
   const radius = 80;
   for (const id in players){
     if (id === attackerId) continue;
-    if (dist(me, players[id]) <= radius) applyDamagePlayer(id, 1, attackerId);
+    if (dist(me, players[id]) <= radius) applyDamagePlayer(id, 4, attackerId);
   }
   bots.slice().forEach(b => {
-    if (dist(me, b) <= radius) applyDamageBot(b.id, 1, attackerId);
+    if (dist(me, b) <= radius) applyDamageBot(b.id, 4, attackerId);
   });
 }
 
@@ -153,8 +153,8 @@ function skillFireball(attackerId, dir){
   }
   bots.forEach(b => consider(b, b.id, 'bot'));
   if (!best) return;
-  if (best.type === 'player') applyDamagePlayer(best.id, 1, attackerId);
-  else applyDamageBot(best.id, 1, attackerId);
+  if (best.type === 'player') applyDamagePlayer(best.id, 7, attackerId);
+  else applyDamageBot(best.id, 7, attackerId);
 }
 
 function skillShield(attackerId){

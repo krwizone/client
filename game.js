@@ -17,6 +17,7 @@ let bots = [];
 let myId = null;
 let selectedClass = null;
 let lastAim = { x: 1, y: 0 };
+let lastDirection = { x: 1, y: 0 }; // player movement direction for arrow
 let effects = []; // transient visual effects
 const FIREBALL_RANGE = 320;
 const FIREBALL_SPEED = 600; // px/s visual speed
@@ -238,6 +239,23 @@ function drawBars(entity){
   ctx.fillRect(entity.x - barW/2, entity.y - 24, barW * energyRatio, barH);
 }
 
+function drawArrow(x, y, dirX, dirY, length = 24){
+  const headlen = 8;
+  const angle = Math.atan2(dirY, dirX);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + dirX * length, y + dirY * length);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x + dirX * length, y + dirY * length);
+  ctx.lineTo(x + dirX * (length - headlen) - Math.sin(angle) * headlen/2, y + dirY * (length - headlen) + Math.cos(angle) * headlen/2);
+  ctx.moveTo(x + dirX * length, y + dirY * length);
+  ctx.lineTo(x + dirX * (length - headlen) + Math.sin(angle) * headlen/2, y + dirY * (length - headlen) - Math.cos(angle) * headlen/2);
+  ctx.stroke();
+}
+
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
@@ -258,14 +276,22 @@ function draw(){
   }
 
   if (me){
-    if (keys.w) local.y -= local.speed;
-    if (keys.s) local.y += local.speed;
-    if (keys.a) local.x -= local.speed;
-    if (keys.d) local.x += local.speed;
+    let dx = 0, dy = 0;
+    if (keys.w) { dy -= local.speed; }
+    if (keys.s) { dy += local.speed; }
+    if (keys.a) { dx -= local.speed; }
+    if (keys.d) { dx += local.speed; }
     if (joy.active){
-      local.x += local.speed * joy.dx;
-      local.y += local.speed * joy.dy;
+      dx += local.speed * joy.dx;
+      dy += local.speed * joy.dy;
     }
+    // Update direction if moving
+    const moveLen = Math.hypot(dx, dy);
+    if (moveLen > 0){
+      lastDirection = { x: dx / moveLen, y: dy / moveLen };
+    }
+    local.x += dx;
+    local.y += dy;
     local.x = clamp(local.x, 20, canvas.width - 20);
     local.y = clamp(local.y, 20, canvas.height - 20);
     if (local.x !== lastX || local.y !== lastY){
@@ -293,6 +319,9 @@ function draw(){
     ctx.arc(px, py, 20, 0, Math.PI*2);
     ctx.fill();
     drawBars({ ...p, x: px, y: py });
+    if (id === myId){
+      drawArrow(px, py, lastDirection.x, lastDirection.y);
+    }
     if (p.shield > 0){
       ctx.strokeStyle = "#0ff";
       ctx.lineWidth = 3;
