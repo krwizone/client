@@ -284,6 +284,21 @@ function draw(){
   ctx.save();
   ctx.translate(-cameraX, -cameraY);
 
+  // Draw background outside map (darker)
+  const mapW = 2400;
+  const mapH = 1600;
+  ctx.fillStyle = '#8b7355';
+  ctx.fillRect(cameraX - 500, cameraY - 500, canvas.width + 1000, canvas.height + 1000);
+  
+  // Draw map area (lighter)
+  ctx.fillStyle = '#d2b48c';
+  ctx.fillRect(0, 0, mapW, mapH);
+  
+  // Draw map border
+  ctx.strokeStyle = '#5c4033';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(0, 0, mapW, mapH);
+
   if (me && spawnedLocal){
     // Soft-correct local position toward server to avoid drift
     const dx = me.x - local.x;
