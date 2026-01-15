@@ -1,6 +1,14 @@
 const socket = io();
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+
+// Resize canvas to fit screen
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 const classSelect = document.getElementById("class-select");
 const attackBtn = document.getElementById("btn-attack");
 const skillBtn = document.getElementById("btn-skill");
