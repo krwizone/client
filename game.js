@@ -21,6 +21,8 @@ let myId = null;
 let selectedClass = null;
 let lastAim = { x: 1, y: 0 };
 let lastDirection = { x: 1, y: 0 }; // player movement direction for arrow
+const MAP_W = 2400;
+const MAP_H = 1600;
 let effects = []; // transient visual effects
 const FIREBALL_RANGE = 320;
 const FIREBALL_SPEED = 600; // px/s visual speed
@@ -270,29 +272,29 @@ function draw(){
 
   const me = players[myId];
   
-  // Update camera to center on player
+  // Update camera to center on player (use server position if available)
   if (me){
-    cameraX = local.x - canvas.width / 2;
-    cameraY = local.y - canvas.height / 2;
+    const cx = me.x ?? local.x;
+    const cy = me.y ?? local.y;
+    cameraX = cx - canvas.width / 2;
+    cameraY = cy - canvas.height / 2;
   }
   
   ctx.save();
   ctx.translate(-cameraX, -cameraY);
 
   // Draw background outside map (darker)
-  const mapW = 2400;
-  const mapH = 1600;
   ctx.fillStyle = '#8b7355';
   ctx.fillRect(cameraX - 500, cameraY - 500, canvas.width + 1000, canvas.height + 1000);
   
   // Draw map area (lighter)
   ctx.fillStyle = '#d2b48c';
-  ctx.fillRect(0, 0, mapW, mapH);
+  ctx.fillRect(0, 0, MAP_W, MAP_H);
   
   // Draw map border
   ctx.strokeStyle = '#5c4033';
   ctx.lineWidth = 8;
-  ctx.strokeRect(0, 0, mapW, mapH);
+  ctx.strokeRect(0, 0, MAP_W, MAP_H);
 
   if (me && spawnedLocal){
     // Soft-correct local position toward server to avoid drift
@@ -326,8 +328,8 @@ function draw(){
     }
     local.x += dx;
     local.y += dy;
-    local.x = clamp(local.x, 20, canvas.width - 20);
-    local.y = clamp(local.y, 20, canvas.height - 20);
+    local.x = clamp(local.x, 20, MAP_W - 20);
+    local.y = clamp(local.y, 20, MAP_H - 20);
     if (local.x !== lastX || local.y !== lastY){
       lastX = local.x; lastY = local.y;
       socket.emit("move", { x: local.x, y: local.y });
@@ -346,8 +348,8 @@ function draw(){
   for (const id in players){
     const p = players[id];
     const info = CLASS_INFO[p.cls] || { color: "red" };
-    const px = id === myId ? local.x : p.x;
-    const py = id === myId ? local.y : p.y;
+    const px = id === myId ? (p.x ?? local.x) : p.x;
+    const py = id === myId ? (p.y ?? local.y) : p.y;
     ctx.fillStyle = info.color;
     ctx.beginPath();
     ctx.arc(px, py, 20, 0, Math.PI*2);
