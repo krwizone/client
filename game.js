@@ -96,8 +96,10 @@ canvas.addEventListener('mousemove', e => {
   const me = players[myId];
   if (!me) return;
   const pos = canvasPos(e);
-  const dx = pos.x - me.x;
-  const dy = pos.y - me.y;
+  const worldX = pos.x + cameraX;
+  const worldY = pos.y + cameraY;
+  const dx = worldX - local.x;
+  const dy = worldY - local.y;
   const n = Math.hypot(dx, dy) || 1;
   lastAim = { x: dx / n, y: dy / n };
 });
@@ -148,12 +150,14 @@ canvas.addEventListener("contextmenu", e => e.preventDefault());
 canvas.addEventListener("mousedown", e => {
   if (!players[myId]) return;
   const pos = canvasPos(e);
+  const worldX = pos.x + cameraX;
+  const worldY = pos.y + cameraY;
   if (e.button === 0){
-    socket.emit("attack", { x: pos.x, y: pos.y });
+    socket.emit("attack", { x: worldX, y: worldY });
   } else if (e.button === 2){
     const me = players[myId];
     if (me && me.energy >= me.maxEnergy){
-      socket.emit("skill", { x: pos.x, y: pos.y });
+      socket.emit("skill", { x: worldX, y: worldY });
     }
   }
 });
@@ -230,6 +234,8 @@ function addFireballEffect(attackerId, ux, uy){
 const local = { x: 450, y: 300, speed: 4 };
 let lastX = local.x;
 let lastY = local.y;
+let cameraX = 0;
+let cameraY = 0;
 
 function drawBars(entity){
   const barW = 40;
@@ -268,6 +274,16 @@ function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   const me = players[myId];
+  
+  // Update camera to center on player
+  if (me){
+    cameraX = local.x - canvas.width / 2;
+    cameraY = local.y - canvas.height / 2;
+  }
+  
+  ctx.save();
+  ctx.translate(-cameraX, -cameraY);
+
   if (me && spawnedLocal){
     // Soft-correct local position toward server to avoid drift
     const dx = me.x - local.x;
@@ -390,7 +406,9 @@ function draw(){
     ctx.restore();
   });
 
-  // HUD
+  ctx.restore();
+
+  // HUD (drawn in screen space after restoring transform)
   if (me){
     ctx.fillStyle = "#000";
     ctx.font = "16px sans-serif";
