@@ -5,7 +5,7 @@
 <title>Knight Multiplayer</title>
 <style>
 body{margin:0;background:#8b7355;overflow:hidden}
-canvas{display:block;background:#8b7355;width:100vw;height:100vh}
+canvas{display:block;background:#8b7355}
 /* Show joystick only on touch devices */
 .joystick{display:none;position:fixed;bottom:20px;left:20px;width:140px;height:140px;border-radius:50%;background:rgba(0,0,0,0.15);backdrop-filter:blur(2px);touch-action:none}
 .joystick .stick{position:absolute;width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,0.35);left:50%;top:50%;transform:translate(-50%, -50%)}
@@ -27,7 +27,7 @@ canvas{display:block;background:#8b7355;width:100vw;height:100vh}
 </head>
 
 <body>
-<canvas id="game"></canvas>
+<canvas id="game" width="2400" height="1600"></canvas>
 
 <div id="class-select" class="class-select">
 	<div class="panel">
